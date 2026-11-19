@@ -1,45 +1,39 @@
-// Loading photos: from the person's own files (never uploaded anywhere) or from
-// the bundled sample illustrations that ship with the app.
+// Photos: the user's own images from disk, and the two bundled samples
+// the app ships with. Everything is read on the person's own machine and
+// never leaves it — no upload, no network.
 
-export function loadImageFile(file) {
+export const SAMPLES = [
+  { id: 'sunset', label: 'Sunset skyline', src: 'samples/sample-sunset.jpg' },
+  { id: 'neon', label: 'Neon street', src: 'samples/sample-neon.jpg' },
+];
+
+// Load an image from a URL (a local file under app/, or a data: URI from a
+// file the user picked) and resolve with the decoded image.
+export function loadImage(src) {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => resolve({ name: file.name, img, url });
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error(`could not read ${file.name}`));
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`could not load image ${src}`));
+    img.src = src;
+  });
+}
+
+// Read a file the user picked in the file input into a data: URI, then
+// decode it as an image.
+export function loadUserFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      loadImage(reader.result).then(resolve, reject);
     };
-    img.src = url;
+    reader.onerror = () => reject(new Error(`could not read ${file.name}`));
+    reader.readAsDataURL(file);
   });
 }
 
-export function loadImageUrl(url, name) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve({ name, img, url });
-    img.onerror = () => reject(new Error(`could not load ${url}`));
-    img.src = url;
-  });
-}
-
-// Add photos to the state and point every empty panel at the first new photo.
-export async function addPhotos(state, files) {
-  const loaded = [];
-  for (const file of files) loaded.push(await loadImageFile(file));
-  const firstIndex = state.photos.length;
-  state.photos.push(...loaded);
-  for (const panel of state.panels) {
-    if (panel.photoIndex >= firstIndex || state.photos[panel.photoIndex] === undefined) {
-      panel.photoIndex = firstIndex;
-    }
-  }
-  return loaded;
-}
-
-export async function addSample(state, url, name) {
-  const photo = await loadImageUrl(url, name);
-  const index = state.photos.length;
-  state.photos.push(photo);
-  return index;
+// Load one of the bundled samples by id.
+export function loadSample(id) {
+  const sample = SAMPLES.find((s) => s.id === id);
+  if (!sample) return Promise.reject(new Error(`unknown sample ${id}`));
+  return loadImage(sample.src);
 }

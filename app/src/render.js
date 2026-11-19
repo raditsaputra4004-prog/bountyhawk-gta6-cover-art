@@ -1,201 +1,176 @@
-// Drawing a cover: every panel's photo, the bold caption band, and the sunset
-// grade that ties the panels together. The same function draws the live preview
-// and the full-size export, so what you see is what the PNG holds.
+// Drawing: everything the cover shows, painted onto any canvas at any
+// size — the live preview and the exported PNG share this one path, so
+// what you see is what you get.
 
-import { CAPTION_STYLES, FILTERS, LAYOUTS, SIZES } from './state.js';
+import { panelCount, panelRects } from './state.js';
 
-const CAPTION_BAND = 0.18;
-
-// A tiny deterministic noise tile for the film grain: the same seed draws the
-// same grain every time, so exports are reproducible.
-function grainTile() {
-  const tile = document.createElement('canvas');
-  tile.width = 128;
-  tile.height = 128;
-  const ctx = tile.getContext('2d');
-  const data = ctx.createImageData(128, 128);
-  let seed = 1337;
-  const next = () => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed / 0x7fffffff;
+// A tiny seeded generator, so the film grain looks the same on every
+// render of the same cover instead of flickering.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function next() {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  for (let i = 0; i < data.data.length; i += 4) {
-    const v = Math.floor(next() * 255);
-    data.data[i] = v;
-    data.data[i + 1] = v;
-    data.data[i + 2] = v;
-    data.data[i + 3] = 255;
-  }
-  ctx.putImageData(data, 0, 0);
-  return tile;
 }
 
-let cachedGrain = null;
-function grainPattern(ctx) {
-  if (!cachedGrain) cachedGrain = ctx.createPattern(grainTile(), 'repeat');
-  return cachedGrain;
-}
+const GRADE_FILTERS = {
+  original: 'none',
+  sunset: 'saturate(1.25) contrast(1.08)',
+  neon: 'saturate(1.45) contrast(1.12)',
+  vivid: 'saturate(1.6) contrast(1.15)',
+  mono: 'grayscale(1) contrast(1.1)',
+};
 
-// The panels' area once the caption band is taken out (top or bottom).
-function panelsArea(state) {
-  const band = CAPTION_BAND;
-  return state.captionPosition === 'top'
-    ? { x: 0, y: band, w: 1, h: 1 - band }
-    : { x: 0, y: 0, w: 1, h: 1 - band };
-}
-
-function drawPhoto(ctx, photo, rect, panel, width, height) {
-  const px = rect.x * width;
-  const py = rect.y * height;
-  const pw = rect.w * width;
-  const ph = rect.h * height;
-  if (!photo) {
-    ctx.fillStyle = '#241a33';
-    ctx.fillRect(px, py, pw, ph);
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-    ctx.lineWidth = Math.max(2, width * 0.002);
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(px + pw, py + ph);
-    ctx.moveTo(px + pw, py);
-    ctx.lineTo(px, py + ph);
-    ctx.stroke();
+// Paint one panel's photo, cropped to fill the panel, panned by the
+// panel's drag offset and scaled by its zoom.
+function paintPhoto(ctx, rect, panel) {
+  const img = panel.photo;
+  if (!img || !img.naturalWidth) {
+    const shade = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + rect.h);
+    shade.addColorStop(0, '#2a2140');
+    shade.addColorStop(1, '#120e1f');
+    ctx.fillStyle = shade;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = `600 ${Math.max(14, rect.w * 0.05)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Add a photo', rect.x + rect.w / 2, rect.y + rect.h / 2);
     return;
   }
-  const img = photo.img;
-  const base = Math.max(pw / img.naturalWidth, ph / img.naturalHeight) * panel.zoom;
-  const dw = img.naturalWidth * base;
-  const dh = img.naturalHeight * base;
-  const dx = px + (pw - dw) / 2 + panel.dx * pw;
-  const dy = py + (ph - dh) / 2 + panel.dy * ph;
+  const base = Math.max(rect.w / img.naturalWidth, rect.h / img.naturalHeight);
+  const scale = base * panel.zoom;
+  const dw = img.naturalWidth * scale;
+  const dh = img.naturalHeight * scale;
+  const dx = rect.x + (rect.w - dw) / 2 + panel.dx * rect.w;
+  const dy = rect.y + (rect.h - dh) / 2 + panel.dy * rect.h;
   ctx.save();
   ctx.beginPath();
-  ctx.rect(px, py, pw, ph);
+  ctx.rect(rect.x, rect.y, rect.w, rect.h);
   ctx.clip();
-  ctx.filter = FILTERS[panel.filter] ?? 'none';
   ctx.drawImage(img, dx, dy, dw, dh);
   ctx.restore();
 }
 
-function drawCaption(ctx, state, width, height) {
-  const bandH = CAPTION_BAND * height;
-  const bandY = state.captionPosition === 'top' ? 0 : height - bandH;
-  const style = CAPTION_STYLES[state.captionStyle] ?? CAPTION_STYLES.white;
-  const size = (state.captionSize / 1080) * width;
-  const text = (state.caption || 'GOLDEN HOUR').toUpperCase();
+// A colour wash over the whole cover, the grade's signature.
+function paintGradeWash(ctx, width, height, grade) {
+  if (grade === 'sunset') {
+    const wash = ctx.createLinearGradient(0, 0, 0, height);
+    wash.addColorStop(0, 'rgba(255, 140, 60, 0.20)');
+    wash.addColorStop(0.55, 'rgba(255, 90, 120, 0.16)');
+    wash.addColorStop(1, 'rgba(90, 30, 120, 0.22)');
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, width, height);
+    ctx.globalCompositeOperation = 'source-over';
+  } else if (grade === 'neon') {
+    const wash = ctx.createLinearGradient(0, 0, width, height);
+    wash.addColorStop(0, 'rgba(0, 220, 255, 0.14)');
+    wash.addColorStop(1, 'rgba(255, 0, 180, 0.16)');
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, width, height);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+}
+
+function paintCaption(ctx, width, height, caption) {
+  const size = Math.round(caption.size * (width / 1080));
+  const y =
+    caption.place === 'top'
+      ? height * 0.14
+      : caption.place === 'center'
+        ? height * 0.5
+        : height * 0.87;
   ctx.save();
-  // A dark band behind the letters keeps them readable over any photo.
-  ctx.fillStyle = state.captionPosition === 'top'
-    ? 'rgba(12, 6, 24, 0.55)'
-    : 'rgba(12, 6, 24, 0.72)';
-  ctx.fillRect(0, bandY, width, bandH);
-  ctx.font = `700 ${size}px "CoverFont", "DejaVu Sans", sans-serif`;
-  try { ctx.letterSpacing = `${Math.round(size * 0.06)}px`; } catch { /* older canvas */ }
+  ctx.font = `900 ${size}px "GoldenHour", "DejaVu Sans", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
-  ctx.shadowColor = style.shadow;
-  ctx.shadowBlur = size * 0.12;
-  ctx.shadowOffsetY = size * 0.03;
-  const lines = wrapLines(ctx, text, width * 0.92);
-  const lineH = size * 1.04;
-  const startY = bandY + bandH / 2 - ((lines.length - 1) * lineH) / 2;
-  for (let i = 0; i < lines.length; i++) {
-    const y = startY + i * lineH;
-    ctx.strokeStyle = style.stroke;
-    ctx.lineWidth = Math.max(2, size * 0.09);
-    ctx.strokeText(lines[i], width / 2, y);
-    ctx.fillStyle = style.fill;
-    ctx.fillText(lines[i], width / 2, y);
+  if (caption.style === 'sunset') {
+    const fill = ctx.createLinearGradient(0, y - size / 2, 0, y + size / 2);
+    fill.addColorStop(0, '#ffd76a');
+    fill.addColorStop(0.5, '#ff7a3d');
+    fill.addColorStop(1, '#ff3d7e');
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = 'rgba(20, 8, 30, 0.9)';
+    ctx.lineWidth = size / 14;
+    ctx.strokeText(caption.text, width / 2, y);
+    ctx.fillText(caption.text, width / 2, y);
+  } else if (caption.style === 'neon') {
+    ctx.shadowColor = '#ff00b4';
+    ctx.shadowBlur = size / 4;
+    ctx.fillStyle = '#7df3ff';
+    ctx.strokeStyle = '#12002e';
+    ctx.lineWidth = size / 14;
+    ctx.strokeText(caption.text, width / 2, y);
+    ctx.fillText(caption.text, width / 2, y);
+  } else {
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = 'rgba(10, 5, 20, 0.95)';
+    ctx.lineWidth = size / 9;
+    ctx.strokeText(caption.text, width / 2, y);
+    ctx.fillText(caption.text, width / 2, y);
   }
   ctx.restore();
 }
 
-function wrapLines(ctx, text, maxWidth) {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines = [];
-  let current = '';
-  for (const word of words) {
-    const test = current ? `${current} ${word}` : word;
-    if (ctx.measureText(test).width <= maxWidth || !current) {
-      current = test;
-    } else {
-      lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.slice(0, 2);
+function paintGlow(ctx, width, height, strength) {
+  if (strength <= 0) return;
+  const glow = ctx.createRadialGradient(
+    width * 0.78, height * 0.16, 0,
+    width * 0.78, height * 0.16, width * 0.55,
+  );
+  glow.addColorStop(0, `rgba(255, 190, 90, ${0.5 * strength})`);
+  glow.addColorStop(1, 'rgba(255, 190, 90, 0)');
+  ctx.globalCompositeOperation = 'screen';
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalCompositeOperation = 'source-over';
 }
 
-export function drawCover(canvas, state) {
-  const size = SIZES[state.sizeKey];
-  const width = size.width;
-  const height = size.height;
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#0d0a14';
+function paintVignette(ctx, width, height) {
+  const shade = ctx.createRadialGradient(
+    width / 2, height / 2, Math.min(width, height) * 0.42,
+    width / 2, height / 2, Math.max(width, height) * 0.75,
+  );
+  shade.addColorStop(0, 'rgba(0,0,0,0)');
+  shade.addColorStop(1, 'rgba(0,0,0,0.42)');
+  ctx.fillStyle = shade;
   ctx.fillRect(0, 0, width, height);
+}
 
-  const area = panelsArea(state);
-  const layout = LAYOUTS[state.layoutKey];
-  layout.panels.forEach((panelRect, i) => {
-    const rect = {
-      x: area.x + panelRect.x * area.w,
-      y: area.y + panelRect.y * area.h,
-      w: panelRect.w * area.w,
-      h: panelRect.h * area.h,
-    };
-    const panel = state.panels[i];
-    drawPhoto(ctx, panel ? state.photos[panel.photoIndex] : undefined, rect, panel ?? { zoom: 1, dx: 0, dy: 0, filter: 'sunset' }, width, height);
-  });
-
-  // Thin sunset seams between the panels.
-  ctx.fillStyle = 'rgba(20, 8, 28, 0.9)';
-  const seam = Math.max(2, Math.round(width * 0.004));
-  layout.panels.forEach((panelRect, i) => {
-    if (i === 0) return;
-    const rect = {
-      x: area.x + panelRect.x * area.w,
-      y: area.y + panelRect.y * area.h,
-      w: panelRect.w * area.w,
-      h: panelRect.h * area.h,
-    };
-    if (panelRect.x > 0) ctx.fillRect(rect.x - seam / 2, rect.y, seam, rect.h);
-    if (panelRect.y > 0) ctx.fillRect(rect.x, rect.y - seam / 2, rect.w, seam);
-  });
-
-  drawCaption(ctx, state, width, height);
-
-  // The sunset glow: warm light washing down from the top.
-  if (state.glow > 0) {
-    const glow = ctx.createLinearGradient(0, 0, 0, height);
-    glow.addColorStop(0, `rgba(255, 154, 61, ${0.22 * state.glow})`);
-    glow.addColorStop(0.55, `rgba(255, 46, 99, ${0.1 * state.glow})`);
-    glow.addColorStop(1, 'rgba(20, 8, 40, 0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, width, height);
+function paintGrain(ctx, width, height) {
+  const rand = mulberry32(1337);
+  const dots = Math.floor((width * height) / 900);
+  ctx.save();
+  for (let i = 0; i < dots; i++) {
+    const light = rand() > 0.5;
+    ctx.fillStyle = light ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
+    ctx.fillRect(rand() * width, rand() * height, 1.4, 1.4);
   }
+  ctx.restore();
+}
 
-  if (state.vignette) {
-    const vig = ctx.createRadialGradient(
-      width / 2, height / 2, Math.min(width, height) * 0.42,
-      width / 2, height / 2, Math.max(width, height) * 0.75,
-    );
-    vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(1, 'rgba(8,4,18,0.5)');
-    ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, width, height);
+// Draw the whole cover onto ctx at the given size.
+export function drawCover(ctx, width, height, state) {
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = '#0d0a18';
+  ctx.fillRect(0, 0, width, height);
+  const rects = panelRects(state, width, height);
+  const count = panelCount(state);
+  ctx.filter = GRADE_FILTERS[state.grade] ?? 'none';
+  for (let i = 0; i < count; i++) {
+    paintPhoto(ctx, rects[i], state.panels[i]);
   }
-
-  if (state.grain) {
-    ctx.save();
-    ctx.globalAlpha = 0.05;
-    ctx.fillStyle = grainPattern(ctx);
-    ctx.fillRect(0, 0, width, height);
-    ctx.restore();
-  }
-  return canvas;
+  ctx.filter = 'none';
+  paintGradeWash(ctx, width, height, state.grade);
+  paintGlow(ctx, width, height, state.glow);
+  paintCaption(ctx, width, height, state.caption);
+  if (state.vignette) paintVignette(ctx, width, height);
+  if (state.grain) paintGrain(ctx, width, height);
 }

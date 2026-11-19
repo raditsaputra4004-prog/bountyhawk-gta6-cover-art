@@ -1,64 +1,50 @@
-// Boot: build the default state, wire the editor, load the caption font, and
-// optionally stage a demo cover from the URL (?demo=triptych|hero|quad with an
-// optional &size=square|portrait|wide and &caption=...). The demo is how the
-// screenshots are staged reproducibly; it uses only the bundled samples.
+// Boot: bring the editor up. Size the preview to the export size's
+// aspect, load the sunset sample into the first panel so the app opens
+// with cover art on screen, then hand the controls over to ui.js.
 
-import { defaultState, syncPanelsToLayout } from './state.js';
-import { addSample } from './photos.js';
-import { wireUi } from './ui.js';
+import { freshState, EXPORT_SIZES } from './state.js';
 import { drawCover } from './render.js';
-import { exportPng } from './export.js';
-import { SIZES } from './state.js';
+import { loadSample } from './photos.js';
+import { initControls } from './ui.js';
 
-const state = defaultState();
+const PREVIEW_LONG_SIDE = 900;
+
+const state = freshState();
 const preview = document.getElementById('preview');
-const render = wireUi(state, preview);
 
-// Test hooks for the maker's own Playwright checks (not part of the UI).
-window.__goldenHour = { state, render, drawCover, exportPng };
-
-function setSizeButtons(sizeKey) {
-  for (const btn of document.querySelectorAll('.size-btn')) {
-    btn.classList.toggle('active', btn.dataset.size === sizeKey);
-  }
-  preview.width = SIZES[sizeKey].width;
-  preview.height = SIZES[sizeKey].height;
+// Size the preview canvas to the chosen export size's aspect at a
+// display-friendly resolution.
+function sizePreview() {
+  const size = EXPORT_SIZES[state.exportSize] ?? EXPORT_SIZES['1920x1080'];
+  const scale = PREVIEW_LONG_SIDE / Math.max(size.width, size.height);
+  preview.width = Math.round(size.width * scale);
+  preview.height = Math.round(size.height * scale);
 }
 
-function setLayoutButtons(layoutKey) {
-  for (const btn of document.querySelectorAll('.layout-btn')) {
-    btn.classList.toggle('active', btn.dataset.layout === layoutKey);
-  }
+function redraw() {
+  sizePreview();
+  const ctx = preview.getContext('2d');
+  drawCover(ctx, preview.width, preview.height, state);
 }
 
-async function applyDemo() {
-  const params = new URLSearchParams(location.search);
-  const demo = params.get('demo');
-  if (!demo) return;
-  const layouts = { triptych: 'triptych', hero: 'hero', quad: 'quad' };
-  if (!layouts[demo]) return;
-  const size = params.get('size');
-  if (size && SIZES[size]) {
-    state.sizeKey = size;
-    setSizeButtons(size);
-  }
-  const caption = params.get('caption');
-  if (caption) {
-    state.caption = caption;
-    document.getElementById('captionInput').value = caption;
-  }
-  state.layoutKey = layouts[demo];
-  setLayoutButtons(state.layoutKey);
-  syncPanelsToLayout(state);
-  const sunset = await addSample(state, 'samples/sample-sunset.jpg', 'Sunset');
-  const neon = await addSample(state, 'samples/sample-neon.jpg', 'Neon');
-  const picks = demo === 'hero' ? [neon, sunset, neon] : [sunset, neon, sunset, neon];
-  state.panels.forEach((panel, i) => { panel.photoIndex = picks[i % picks.length]; });
-  render();
+// Wait for the caption font, then draw — the first paint should already
+// carry the poster's lettering.
+function start() {
+  initControls(state, redraw);
+  redraw();
+  loadSample('sunset')
+    .then((img) => {
+      state.panels[0].photo = img;
+      redraw();
+    })
+    .catch(() => {
+      // The app still works without the sample; the panel shows its
+      // placeholder until the user loads a photo.
+    });
 }
 
-// The caption font must be ready before the first real paint, or the letters
-// fall back to a system font for one frame.
-document.fonts.load('700 96px "CoverFont"').catch(() => {}).finally(() => {
-  applyDemo().then(render).catch((err) => console.error(err));
-});
+if (document.fonts && document.fonts.load) {
+  document.fonts.load('900 110px "GoldenHour"').finally(start);
+} else {
+  start();
+}

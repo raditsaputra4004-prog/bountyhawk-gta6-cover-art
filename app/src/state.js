@@ -1,86 +1,71 @@
-// The cover's state: which size, layout, photos, per-panel crop, caption and grade.
-// Everything the renderer needs lives here, so the preview, the export and the
-// demo mode all draw from the same state object.
+// The cover's state: one plain object, mutated only through the helpers
+// here, so the preview, the export and the controls always agree.
 
-export const SIZES = {
-  square: { label: '1080 × 1080', width: 1080, height: 1080 },
-  portrait: { label: '1080 × 1350', width: 1080, height: 1350 },
-  wide: { label: '1920 × 1080', width: 1920, height: 1080 },
-};
-
-// Panel rectangles as fractions of the cover (x, y, w, h). The caption band takes
-// the top or bottom 18%; the panels fill the rest.
 export const LAYOUTS = {
-  triptych: {
-    label: 'Triptych',
-    panels: [
-      { x: 0.0, y: 0, w: 1 / 3, h: 1 },
-      { x: 1 / 3, y: 0, w: 1 / 3, h: 1 },
-      { x: 2 / 3, y: 0, w: 1 / 3, h: 1 },
-    ],
-  },
-  hero: {
-    label: 'Hero + Strip',
-    panels: [
-      { x: 0.0, y: 0, w: 0.62, h: 1 },
-      { x: 0.62, y: 0, w: 0.38, h: 0.5 },
-      { x: 0.62, y: 0.5, w: 0.38, h: 0.5 },
-    ],
-  },
-  quad: {
-    label: 'Quad',
-    panels: [
-      { x: 0.0, y: 0, w: 0.5, h: 0.5 },
-      { x: 0.5, y: 0, w: 0.5, h: 0.5 },
-      { x: 0.0, y: 0.5, w: 0.5, h: 0.5 },
-      { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
-    ],
-  },
+  triptych: { panels: 3, label: 'Triptych' },
+  hero: { panels: 3, label: 'Hero + Strip' },
+  quad: { panels: 4, label: 'Quad 2×2' },
 };
 
-export const FILTERS = {
-  sunset: 'saturate(1.5) contrast(1.08) sepia(0.28) brightness(1.02)',
-  neon: 'saturate(1.9) contrast(1.15) hue-rotate(-18deg)',
-  vivid: 'saturate(1.7) contrast(1.12)',
-  mono: 'grayscale(1) contrast(1.1)',
-  original: 'none',
+export const GRADES = ['original', 'sunset', 'neon', 'vivid', 'mono'];
+
+export const EXPORT_SIZES = {
+  '1080x1080': { width: 1080, height: 1080, label: '1080 × 1080' },
+  '1080x1350': { width: 1080, height: 1350, label: '1080 × 1350' },
+  '1920x1080': { width: 1920, height: 1080, label: '1920 × 1080' },
 };
 
-export const CAPTION_STYLES = {
-  white: { fill: '#ffffff', stroke: '#14081e', shadow: 'rgba(0,0,0,0.55)' },
-  gold: { fill: '#ffd23f', stroke: '#1c0a00', shadow: 'rgba(0,0,0,0.6)' },
-  neon: { fill: '#ff5da2', stroke: '#2a0033', shadow: 'rgba(255,45,149,0.7)' },
-  black: { fill: '#14101d', stroke: '#ffffff', shadow: 'rgba(255,255,255,0.35)' },
-};
+export const CAPTION_STYLES = ['outline', 'sunset', 'neon'];
 
-function freshPanel(photoIndex) {
-  return { photoIndex, zoom: 1, dx: 0, dy: 0, filter: 'sunset' };
+export function emptyPanel() {
+  return { photo: null, zoom: 1, dx: 0, dy: 0 };
 }
 
-export function defaultState() {
+export function freshState() {
   return {
-    sizeKey: 'square',
-    layoutKey: 'triptych',
-    selectedPanel: 0,
-    // photos: [{ name, img }] — img is an HTMLImageElement, loaded locally.
-    photos: [],
-    panels: [freshPanel(0), freshPanel(0), freshPanel(0)],
-    caption: 'GOLDEN HOUR',
-    captionSize: 96,
-    captionPosition: 'bottom',
-    captionStyle: 'white',
-    glow: 0.6,
+    layout: 'triptych',
+    panels: [emptyPanel(), emptyPanel(), emptyPanel(), emptyPanel()],
+    selected: 0,
+    caption: { text: 'NEON NIGHTS', size: 110, place: 'bottom', style: 'outline' },
+    grade: 'sunset',
+    glow: 0.55,
     vignette: true,
     grain: true,
+    exportSize: '1920x1080',
   };
 }
 
-// Keep the panel list in step with the layout: reuse a panel's settings when the
-// layout still has that slot, otherwise start it fresh.
-export function syncPanelsToLayout(state) {
-  const count = LAYOUTS[state.layoutKey].panels.length;
-  const next = [];
-  for (let i = 0; i < count; i++) next.push(state.panels[i] ?? freshPanel(0));
-  state.panels = next;
-  state.selectedPanel = Math.min(state.selectedPanel, count - 1);
+// How many panels the current layout actually draws.
+export function panelCount(state) {
+  return LAYOUTS[state.layout].panels;
+}
+
+// The rectangles each panel occupies on a cover of the given size, as
+// fractions turned into pixels. A thin gutter separates the panels, the
+// poster's signature look.
+export function panelRects(state, width, height) {
+  const gap = Math.round(width * 0.012);
+  if (state.layout === 'triptych') {
+    const w = Math.floor((width - gap * 2) / 3);
+    return [0, 1, 2].map((i) => ({ x: i * (w + gap), y: 0, w, h: height }));
+  }
+  if (state.layout === 'hero') {
+    const heroW = Math.floor(width * 0.62);
+    const stripX = heroW + gap;
+    const stripW = width - stripX;
+    const stripH = Math.floor((height - gap) / 2);
+    return [
+      { x: 0, y: 0, w: heroW, h: height },
+      { x: stripX, y: 0, w: stripW, h: stripH },
+      { x: stripX, y: stripH + gap, w: stripW, h: stripH },
+    ];
+  }
+  const w = Math.floor((width - gap) / 2);
+  const h = Math.floor((height - gap) / 2);
+  return [
+    { x: 0, y: 0, w, h },
+    { x: w + gap, y: 0, w, h },
+    { x: 0, y: h + gap, w, h },
+    { x: w + gap, y: h + gap, w, h },
+  ];
 }
