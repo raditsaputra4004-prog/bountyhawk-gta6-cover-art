@@ -1,96 +1,128 @@
-@font-face {
-  font-family: "GoldenHour";
-  src: url("./fonts/DejaVuSans-Bold.ttf") format("truetype");
-  font-weight: 900;
-  font-style: normal;
-}
+/* Golden Hour Cover Studio — editor chrome.
+   All type uses the system font stack: no font file is bundled. */
 
 :root {
-  color-scheme: dark;
-  --bg: #0d0a18;
-  --panel: #171226;
-  --panel2: #1e1830;
-  --line: #2e2547;
-  --text: #f2ecff;
-  --muted: #a99ec7;
-  --accent: #ff7a3d;
-  --accent2: #ff3d7e;
+  --ink: #f4ede3;
+  --ink-dim: #b9a89a;
+  --paper: #171019;
+  --panel: #241a26;
+  --panel-line: #3a2b3e;
+  --accent: #ff9a3c;
+  --accent-hot: #ff5e7a;
+  --font-stack: 'DejaVu Sans', Arial, Helvetica, sans-serif;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: "DejaVu Sans", system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-stack);
+  font-size: 15px;
+  line-height: 1.45;
 }
 
-.topbar {
-  padding: 18px 24px 8px;
-  border-bottom: 1px solid var(--line);
+.masthead {
+  padding: 20px 28px 8px;
+  border-bottom: 1px solid var(--panel-line);
 }
 
-.topbar h1 {
-  margin: 0;
+.masthead h1 {
+  margin: 0 0 4px;
   font-size: 26px;
   letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
-.tagline { margin: 6px 0 0; color: var(--muted); }
+.masthead p { margin: 0 0 10px; color: var(--ink-dim); }
 
-.editor {
+.workbench {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 20px;
-  padding: 20px 24px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 24px;
+  padding: 20px 28px 32px;
   align-items: start;
 }
 
-.previewPane canvas {
+.stage { min-width: 0; }
+
+.canvas-wrap {
+  background: #0d0a0f;
+  border: 1px solid var(--panel-line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+canvas#preview {
+  display: block;
   width: 100%;
   height: auto;
-  display: block;
-  background: #000;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  touch-action: none;
   cursor: grab;
+  border-radius: 4px;
+  touch-action: none;
 }
 
-.previewPane canvas:active { cursor: grabbing; }
+canvas#preview:active { cursor: grabbing; }
 
-.chips { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.panel-chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
 
-.hint { color: var(--muted); font-size: 13px; }
-
-.controls {
+.panel-chips button {
+  min-width: 92px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-line);
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 16px;
-  display: grid;
-  gap: 18px;
+  color: var(--ink-dim);
+  font-family: var(--font-stack);
+  font-size: 13px;
+  cursor: pointer;
 }
 
-.group h2 {
+.panel-chips button.active {
+  border-color: var(--accent);
+  color: var(--ink);
+  background: #3a2620;
+}
+
+.hint { color: var(--ink-dim); font-size: 13px; }
+
+.controls { display: grid; gap: 14px; }
+
+.control-block {
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.control-block h2 {
   margin: 0 0 10px;
   font-size: 13px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: var(--muted);
+  color: var(--accent);
 }
 
-.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.control-block label { display: block; margin: 8px 0; font-size: 14px; }
+.control-block label span { float: right; color: var(--ink-dim); }
+.control-block .check span { float: none; }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
 
 button {
-  background: var(--panel2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 8px 12px;
-  font: inherit;
+  font-family: var(--font-stack);
   font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-line);
+  background: #33263a;
+  color: var(--ink);
   cursor: pointer;
 }
 
@@ -99,70 +131,43 @@ button:hover { border-color: var(--accent); }
 button.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #1a0b00;
+  color: #1c0f14;
   font-weight: 700;
 }
 
 button.primary {
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  border: none;
-  color: #fff;
-  font-weight: 700;
   width: 100%;
   padding: 12px;
-  font-size: 16px;
+  margin-top: 6px;
+  background: var(--accent-hot);
+  border-color: var(--accent-hot);
+  font-weight: 700;
+  font-size: 15px;
 }
-
-button:disabled { opacity: 0.5; cursor: wait; }
-
-.chip.active {
-  background: var(--accent2);
-  border-color: var(--accent2);
-  color: #fff;
-}
-
-label { display: grid; gap: 6px; font-size: 14px; margin-bottom: 10px; }
-
-label.slider { grid-template-columns: 1fr auto; align-items: center; }
-label.slider span { color: var(--muted); font-size: 13px; }
-label.slider input { grid-column: 1 / -1; width: 100%; }
-
-label.check { display: flex; align-items: center; gap: 8px; }
 
 input[type="text"], select {
-  background: var(--panel2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  width: 100%;
   padding: 8px 10px;
-  font: inherit;
-}
-
-input[type="range"] { accent-color: var(--accent); }
-
-.fileBtn {
-  display: block;
-  background: var(--panel2);
-  border: 1px dashed var(--line);
   border-radius: 6px;
-  padding: 12px;
-  text-align: center;
+  border: 1px solid var(--panel-line);
+  background: #120d14;
+  color: var(--ink);
+  font-family: var(--font-stack);
+  font-size: 15px;
+}
+
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+.file-label {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px dashed var(--accent);
   cursor: pointer;
-  margin-bottom: 10px;
 }
 
-.fileBtn input { display: none; }
-
-#fillAllBtn { width: 100%; margin-top: 4px; }
-
-.status { color: var(--muted); font-size: 13px; min-height: 18px; }
-
-.foot {
-  padding: 0 24px 24px;
-  color: var(--muted);
-  font-size: 13px;
-}
+.file-label input { display: none; }
 
 @media (max-width: 900px) {
-  .editor { grid-template-columns: 1fr; }
+  .workbench { grid-template-columns: 1fr; }
 }

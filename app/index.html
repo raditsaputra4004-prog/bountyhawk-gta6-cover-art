@@ -1,110 +1,94 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Golden Hour Cover Studio</title>
-<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="topbar">
+<header class="masthead">
   <h1>Golden Hour Cover Studio</h1>
-  <p class="tagline">Your photos + a caption, turned into GTA 6-style multi-panel cover art.</p>
+  <p>Turn your photos and a caption into multi-panel cover art. Everything runs on your machine — photos are never uploaded.</p>
 </header>
-
-<main class="editor">
-  <section class="previewPane">
-    <canvas id="preview" width="900" height="506" aria-label="Cover preview"></canvas>
-    <div id="panelChips" class="chips" aria-label="Choose a panel"></div>
-    <p class="hint">Click a panel to select it, then drag its photo to pan. Load your own photo or a sample below.</p>
+<main class="workbench">
+  <section class="stage">
+    <div class="canvas-wrap">
+      <canvas id="preview" width="960" height="540" aria-label="Cover preview"></canvas>
+    </div>
+    <div class="panel-chips" id="panelChips" role="group" aria-label="Panels"></div>
+    <p class="hint">Drag on the preview to move the selected panel's photo. The zoom slider scales it.</p>
   </section>
-
   <aside class="controls">
-    <section class="group">
+    <section class="control-block">
+      <h2>Photo</h2>
+      <label class="file-label">Load your photo
+        <input type="file" id="photoFile" accept="image/*">
+      </label>
+      <div class="row">
+        <button type="button" id="sampleSunset">Sample: sunset</button>
+        <button type="button" id="sampleNeon">Sample: neon street</button>
+      </div>
+      <button type="button" id="fillAll">Fill all panels with this photo</button>
+    </section>
+    <section class="control-block">
       <h2>Layout</h2>
-      <div id="layoutRow" class="row">
-        <button type="button" data-layout="triptych">Triptych</button>
+      <div class="row" id="layoutRow">
+        <button type="button" data-layout="triptych" class="active">Triptych</button>
         <button type="button" data-layout="hero">Hero + Strip</button>
         <button type="button" data-layout="quad">Quad 2×2</button>
       </div>
     </section>
-
-    <section class="group">
-      <h2>Photo</h2>
-      <label class="fileBtn">Load a photo from your machine
-        <input id="photoInput" type="file" accept="image/*">
-      </label>
-      <div class="row">
-        <button type="button" data-sample="sunset">Sample: Sunset skyline</button>
-        <button type="button" data-sample="neon">Sample: Neon street</button>
-      </div>
-      <button type="button" id="fillAllBtn">Fill all panels with this photo</button>
-      <label class="slider">Zoom <span id="zoomVal">1.00×</span>
-        <input id="zoomRange" type="range" min="100" max="300" value="100">
-      </label>
-    </section>
-
-    <section class="group">
-      <h2>Grade</h2>
-      <div id="gradeRow" class="row">
-        <button type="button" data-grade="original">Original</button>
-        <button type="button" data-grade="sunset">Sunset</button>
+    <section class="control-block">
+      <h2>Colour grade</h2>
+      <div class="row" id="gradeRow">
+        <button type="button" data-grade="sunset" class="active">Sunset</button>
         <button type="button" data-grade="neon">Neon</button>
         <button type="button" data-grade="vivid">Vivid</button>
         <button type="button" data-grade="mono">Mono</button>
+        <button type="button" data-grade="original">Original</button>
       </div>
     </section>
-
-    <section class="group">
+    <section class="control-block">
       <h2>Caption</h2>
-      <label>Text
-        <input id="captionText" type="text" maxlength="24" value="NEON NIGHTS">
+      <input type="text" id="captionText" value="NEON NIGHTS" maxlength="24" aria-label="Caption text">
+      <label>Size <span id="captionSizeOut">16%</span>
+        <input type="range" id="captionSize" min="8" max="26" value="16">
       </label>
-      <label class="slider">Size <span id="captionSizeVal">110 px</span>
-        <input id="captionSize" type="range" min="48" max="200" value="110">
-      </label>
-      <label>Position
-        <select id="captionPlace">
-          <option value="top">Top</option>
-          <option value="center">Centre</option>
-          <option value="bottom" selected>Bottom</option>
-        </select>
+      <label>Height <span id="captionYOut">86%</span>
+        <input type="range" id="captionY" min="55" max="95" value="86">
       </label>
       <label>Style
         <select id="captionStyle">
-          <option value="outline" selected>Outline</option>
-          <option value="sunset">Sunset</option>
-          <option value="neon">Neon</option>
+          <option value="outline">Bold outline</option>
+          <option value="solid">Solid white</option>
+          <option value="shadow">Hard shadow</option>
         </select>
       </label>
     </section>
-
-    <section class="group">
+    <section class="control-block">
       <h2>Effects</h2>
-      <label class="slider">Sunset glow <span id="glowVal">55%</span>
-        <input id="glowRange" type="range" min="0" max="100" value="55">
+      <label>Sunset glow <span id="glowOut">60%</span>
+        <input type="range" id="glow" min="0" max="100" value="60">
       </label>
-      <label class="check"><input id="vignetteToggle" type="checkbox" checked> Vignette</label>
-      <label class="check"><input id="grainToggle" type="checkbox" checked> Film grain</label>
+      <label class="check"><input type="checkbox" id="vignette" checked> Vignette</label>
+      <label class="check"><input type="checkbox" id="grain" checked> Film grain</label>
     </section>
-
-    <section class="group">
+    <section class="control-block">
       <h2>Export</h2>
-      <div id="sizeRow" class="row">
+      <label>Zoom <span id="zoomOut">1.40×</span>
+        <input type="range" id="zoom" min="100" max="300" value="140">
+      </label>
+      <div class="row" id="sizeRow">
         <button type="button" data-size="1080x1080">1080 × 1080</button>
         <button type="button" data-size="1080x1350">1080 × 1350</button>
-        <button type="button" data-size="1920x1080">1920 × 1080</button>
+        <button type="button" data-size="1920x1080" class="active">1920 × 1080</button>
       </div>
       <button type="button" id="exportBtn" class="primary">Export PNG</button>
-      <p id="exportStatus" class="status" aria-live="polite"></p>
+      <p class="hint">The export is the exact cover, at the size above — no watermark.</p>
     </section>
   </aside>
 </main>
-
-<footer class="foot">
-  <p>Photos stay on your machine — nothing is uploaded. The samples are original illustrations drawn in code. Caption font: DejaVu Sans Bold (Bitstream Vera license).</p>
-</footer>
-
-<script type="module" src="./src/boot.js"></script>
+<script type="module" src="src/boot.js"></script>
 </body>
 </html>

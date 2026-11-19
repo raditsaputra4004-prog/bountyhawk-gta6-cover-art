@@ -1,5 +1,9 @@
-// The cover's state: one plain object, mutated only through the helpers
-// here, so the preview, the export and the controls always agree.
+// Golden Hour Cover Studio — state.
+//
+// One plain object holds everything the editor shows: the layout, the
+// grade, the caption, the effects, and one photo slot per panel. Panels
+// are counted per layout; the geometry lives in layoutRects() so the
+// renderer and the hit-tester agree on every rect.
 
 export const LAYOUTS = {
   triptych: { panels: 3, label: 'Triptych' },
@@ -7,65 +11,69 @@ export const LAYOUTS = {
   quad: { panels: 4, label: 'Quad 2×2' },
 };
 
-export const GRADES = ['original', 'sunset', 'neon', 'vivid', 'mono'];
+export const GRADES = ['sunset', 'neon', 'vivid', 'mono', 'original'];
 
 export const EXPORT_SIZES = {
-  '1080x1080': { width: 1080, height: 1080, label: '1080 × 1080' },
-  '1080x1350': { width: 1080, height: 1350, label: '1080 × 1350' },
-  '1920x1080': { width: 1920, height: 1080, label: '1920 × 1080' },
+  '1080x1080': { w: 1080, h: 1080 },
+  '1080x1350': { w: 1080, h: 1350 },
+  '1920x1080': { w: 1920, h: 1080 },
 };
 
-export const CAPTION_STYLES = ['outline', 'sunset', 'neon'];
+const GUTTER = 0.012; // panel gap, as a fraction of the shorter side
 
-export function emptyPanel() {
-  return { photo: null, zoom: 1, dx: 0, dy: 0 };
+function emptyPanel() {
+  return { image: null, src: '', zoom: 1.4, anchorX: 0.5, anchorY: 0.5 };
 }
 
 export function freshState() {
   return {
     layout: 'triptych',
-    panels: [emptyPanel(), emptyPanel(), emptyPanel(), emptyPanel()],
-    selected: 0,
-    caption: { text: 'NEON NIGHTS', size: 110, place: 'bottom', style: 'outline' },
     grade: 'sunset',
-    glow: 0.55,
+    caption: { text: 'NEON NIGHTS', size: 0.16, y: 0.86, style: 'outline' },
+    glow: 0.6,
     vignette: true,
     grain: true,
     exportSize: '1920x1080',
+    selected: 0,
+    panels: [emptyPanel(), emptyPanel(), emptyPanel(), emptyPanel()],
   };
 }
 
-// How many panels the current layout actually draws.
-export function panelCount(state) {
-  return LAYOUTS[state.layout].panels;
-}
-
-// The rectangles each panel occupies on a cover of the given size, as
-// fractions turned into pixels. A thin gutter separates the panels, the
-// poster's signature look.
-export function panelRects(state, width, height) {
-  const gap = Math.round(width * 0.012);
-  if (state.layout === 'triptych') {
-    const w = Math.floor((width - gap * 2) / 3);
-    return [0, 1, 2].map((i) => ({ x: i * (w + gap), y: 0, w, h: height }));
+// Panel rectangles for a layout, in fractions of the canvas (x, y, w, h).
+// Every layout leaves the same thin gutter between panels.
+export function layoutRects(layout, w, h) {
+  const g = GUTTER * Math.min(w, h);
+  const inset = g / 2;
+  if (layout === 'triptych') {
+    const pw = (w - 4 * g) / 3;
+    return [0, 1, 2].map((i) => ({ x: g + i * (pw + g), y: inset, w: pw, h: h - g }));
   }
-  if (state.layout === 'hero') {
-    const heroW = Math.floor(width * 0.62);
-    const stripX = heroW + gap;
-    const stripW = width - stripX;
-    const stripH = Math.floor((height - gap) / 2);
+  if (layout === 'hero') {
+    const heroW = w * 0.62 - g;
+    const stripX = w * 0.62 + g / 2;
+    const stripW = w - stripX - g;
+    const stripH = (h - 3 * g) / 2;
     return [
-      { x: 0, y: 0, w: heroW, h: height },
-      { x: stripX, y: 0, w: stripW, h: stripH },
-      { x: stripX, y: stripH + gap, w: stripW, h: stripH },
+      { x: inset, y: inset, w: heroW, h: h - g },
+      { x: stripX, y: inset, w: stripW, h: stripH },
+      { x: stripX, y: inset + stripH + g, w: stripW, h: stripH },
     ];
   }
-  const w = Math.floor((width - gap) / 2);
-  const h = Math.floor((height - gap) / 2);
+  // quad: 2×2 grid.
+  const cw = (w - 3 * g) / 2;
+  const ch = (h - 3 * g) / 2;
   return [
-    { x: 0, y: 0, w, h },
-    { x: w + gap, y: 0, w, h },
-    { x: 0, y: h + gap, w, h },
-    { x: w + gap, y: h + gap, w, h },
+    { x: g, y: g, w: cw, h: ch },
+    { x: g + cw + g, y: g, w: cw, h: ch },
+    { x: g, y: g + ch + g, w: cw, h: ch },
+    { x: g + cw + g, y: g + ch + g, w: cw, h: ch },
   ];
+}
+
+export function panelCount(layout) {
+  return LAYOUTS[layout].panels;
+}
+
+export function exportDims(sizeKey) {
+  return EXPORT_SIZES[sizeKey];
 }

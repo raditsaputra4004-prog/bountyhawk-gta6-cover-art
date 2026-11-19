@@ -1,50 +1,53 @@
-// Boot: bring the editor up. Size the preview to the export size's
-// aspect, load the sunset sample into the first panel so the app opens
-// with cover art on screen, then hand the controls over to ui.js.
+// Golden Hour Cover Studio — boot.
+//
+// Starts the editor: sizes the preview canvas to the chosen export
+// aspect, loads the two bundled samples into the first panels, wires the
+// controls, and paints the first preview. The app is plain static files;
+// if a sample fails to load, the editor still opens with empty panels.
 
-import { freshState, EXPORT_SIZES } from './state.js';
+import { freshState, exportDims } from './state.js';
+import { loadImage, SAMPLE_SUNSET, SAMPLE_NEON } from './photos.js';
 import { drawCover } from './render.js';
-import { loadSample } from './photos.js';
-import { initControls } from './ui.js';
-
-const PREVIEW_LONG_SIDE = 900;
+import { wireControls } from './ui.js';
 
 const state = freshState();
-const preview = document.getElementById('preview');
+const canvas = document.getElementById('preview');
 
-// Size the preview canvas to the chosen export size's aspect at a
-// display-friendly resolution.
 function sizePreview() {
-  const size = EXPORT_SIZES[state.exportSize] ?? EXPORT_SIZES['1920x1080'];
-  const scale = PREVIEW_LONG_SIDE / Math.max(size.width, size.height);
-  preview.width = Math.round(size.width * scale);
-  preview.height = Math.round(size.height * scale);
+  const { w, h } = exportDims(state.exportSize);
+  // Preview resolution: same aspect as the export, capped at 960 wide.
+  const scale = Math.min(1, 960 / w);
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
 }
 
 function redraw() {
   sizePreview();
-  const ctx = preview.getContext('2d');
-  drawCover(ctx, preview.width, preview.height, state);
+  const ctx = canvas.getContext('2d');
+  drawCover(ctx, state, canvas.width, canvas.height);
 }
 
-// Wait for the caption font, then draw — the first paint should already
-// carry the poster's lettering.
-function start() {
-  initControls(state, redraw);
-  redraw();
-  loadSample('sunset')
-    .then((img) => {
-      state.panels[0].photo = img;
-      redraw();
-    })
-    .catch(() => {
-      // The app still works without the sample; the panel shows its
-      // placeholder until the user loads a photo.
-    });
+async function loadSamples() {
+  try {
+    const sunset = await loadImage(SAMPLE_SUNSET);
+    state.panels[0].image = sunset;
+    state.panels[0].src = SAMPLE_SUNSET;
+  } catch (err) {
+    console.warn(err.message);
+  }
+  try {
+    const neon = await loadImage(SAMPLE_NEON);
+    state.panels[1].image = neon;
+    state.panels[1].src = SAMPLE_NEON;
+    if (state.layout !== 'quad') {
+      state.panels[2].image = neon;
+      state.panels[2].src = SAMPLE_NEON;
+    }
+  } catch (err) {
+    console.warn(err.message);
+  }
 }
 
-if (document.fonts && document.fonts.load) {
-  document.fonts.load('900 110px "GoldenHour"').finally(start);
-} else {
-  start();
-}
+wireControls(state, redraw);
+await loadSamples();
+redraw();
